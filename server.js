@@ -21,6 +21,31 @@ function generateRoomId() {
     return id;
 }
 
+// プレイヤーの部屋退出共通処理
+function handlePlayerLeave(socket) {
+    const roomId = socket.roomId;
+    if (!roomId || !rooms[roomId]) return;
+
+    const room = rooms[roomId];
+    socket.leave(roomId);
+    socket.roomId = null;
+
+    delete room.players[socket.id];
+
+    if (Object.keys(room.players).length === 0) {
+        if (room.timer) clearInterval(room.timer);
+        delete rooms[roomId];
+    } else {
+        if (room.timer) clearInterval(room.timer);
+        // ホストが抜けたら残った人をホストにする
+        if (room.hostId === socket.id) {
+            room.hostId = Object.keys(room.players)[0];
+        }
+        room.status = 'waiting';
+        io.to(roomId).emit('opponentLeft', room);
+    }
+}
+
 io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
 
@@ -34,7 +59,8 @@ io.on('connection', (socket) => {
             settings: {
                 maxHp: 30,
                 timeLimit: 60, // 秒 (最大300秒 = 5分)
-                difficulty: 'medium'
+                difficulty: 'medium',
+                attackEnabled: true // 単語クリアで相手-1のON/OFF
             },
             players: {},
             timer: null,
@@ -89,6 +115,12 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('updateRoom', room);
     });
 
+    // 部屋から退出してトップ画面（ロビー一覧/ホーム）に戻る
+    socket.on('leaveRoom', () => {
+        handlePlayerLeave(socket);
+        socket.emit('leftRoom');
+    });
+
     // ホストによるルール設定変更
     socket.on('updateSettings', ({ settings }) => {
         const room = rooms[socket.roomId];
@@ -97,7 +129,8 @@ io.on('connection', (socket) => {
         room.settings = {
             maxHp: Math.max(5, Math.min(200, Number(settings.maxHp) || 30)),
             timeLimit: Math.max(30, Math.min(300, Number(settings.timeLimit) || 60)),
-            difficulty: ['easy', 'medium', 'hard', 'goat'].includes(settings.difficulty) ? settings.difficulty : 'medium'
+            difficulty: ['easy', 'medium', 'hard', 'goat', 'mix'].includes(settings.difficulty) ? settings.difficulty : 'medium',
+            attackEnabled: Boolean(settings.attackEnabled)
         };
 
         // 全プレイヤーの初期HPを同期
@@ -119,7 +152,7 @@ io.on('connection', (socket) => {
 
         room.status = 'playing';
         room.remainingTime = room.settings.timeLimit;
-        room.wordIndices = wordIndices; // クライアント側でシャッフルした問題順を共有
+        room.wordIndices = wordIndices;
 
         Object.values(room.players).forEach(p => {
             p.hp = room.settings.maxHp;
@@ -145,7 +178,7 @@ io.on('connection', (socket) => {
         }, 1000);
     });
 
-    // タイプミス時のHP減少処理
+    // タイプミス時のHP減少処理（常時発動：ミス1回で -1）
     socket.on('playerMiss', () => {
         const room = rooms[socket.roomId];
         if (!room || room.status !== 'playing') return;
@@ -163,8 +196,8 @@ io.on('connection', (socket) => {
         io.to(room.id).emit('updatePlayers', room.players);
     });
 
-    // 単語クリア時のスコア加算＆相手への攻撃（または次の単語へ）
-    socket.on('wordCompleted', ({ damage }) => {
+    // 単語クリア時のスコア加算＆相手への攻撃（attackEnabledがONの時のみ -1）
+    socket.on('wordCompleted', () => {
         const room = rooms[socket.roomId];
         if (!room || room.status !== 'playing') return;
         const player = room.players[socket.id];
@@ -173,18 +206,19 @@ io.on('connection', (socket) => {
         player.score += 100;
         player.currentWordIndex++;
 
-        // 相手プレイヤーにもダメージを与える（1単語クリアにつき1ダメージ）
-        const opponent = Object.values(room.players).find(p => p.id !== socket.id);
-        if (opponent && !opponent.isDead) {
-            opponent.hp = Math.max(0, opponent.hp - (damage || 1));
-            if (opponent.hp === 0) {
-                opponent.isDead = true;
-                opponent.reviveClicks = 0;
+        if (room.settings.attackEnabled) {
+            const opponent = Object.values(room.players).find(p => p.id !== socket.id);
+            if (opponent && !opponent.isDead) {
+                opponent.hp = Math.max(0, opponent.hp - 1);
+                if (opponent.hp === 0) {
+                    opponent.isDead = true;
+                    opponent.reviveClicks = 0;
+                }
             }
+            io.to(room.id).emit('attackEffect', { attackerId: socket.id });
         }
 
         io.to(room.id).emit('updatePlayers', room.players);
-        io.to(room.id).emit('attackEffect', { attackerId: socket.id });
     });
 
     // 復活ボタン連打処理（30回でHP5回復）
@@ -198,13 +232,13 @@ io.on('connection', (socket) => {
         if (player.reviveClicks >= 30) {
             player.isDead = false;
             player.reviveClicks = 0;
-            player.hp = Math.min(player.maxHp, 5); // HPを5回復して復活
+            player.hp = Math.min(player.maxHp, 5);
         }
 
         io.to(room.id).emit('updatePlayers', room.players);
     });
 
-    // ロビーに戻る
+    // 試合終了後に待機部屋へ戻る
     socket.on('returnToLobby', () => {
         const room = rooms[socket.roomId];
         if (!room) return;
@@ -215,22 +249,7 @@ io.on('connection', (socket) => {
 
     // 切断処理
     socket.on('disconnect', () => {
-        const roomId = socket.roomId;
-        const room = rooms[roomId];
-        if (room) {
-            if (room.timer) clearInterval(room.timer);
-            delete room.players[socket.id];
-            if (Object.keys(room.players).length === 0) {
-                delete rooms[roomId];
-            } else {
-                // ホストが抜けたら残った人をホストにする
-                if (room.hostId === socket.id) {
-                    room.hostId = Object.keys(room.players)[0];
-                }
-                room.status = 'waiting';
-                io.to(roomId).emit('opponentLeft', room);
-            }
-        }
+        handlePlayerLeave(socket);
     });
 });
 
@@ -245,7 +264,6 @@ function endGame(roomId, reason) {
 
     if (players.length === 2) {
         const [p1, p2] = players;
-        // 生存優先 -> 残りHP優先 -> スコア優先
         if (!p1.isDead && p2.isDead) winnerId = p1.id;
         else if (p1.isDead && !p2.isDead) winnerId = p2.id;
         else if (p1.hp !== p2.hp) winnerId = p1.hp > p2.hp ? p1.id : p2.id;
@@ -256,4 +274,6 @@ function endGame(roomId, reason) {
 }
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`ポート ${PORT} で起動中`));
+server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});

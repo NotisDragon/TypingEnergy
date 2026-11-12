@@ -14,7 +14,10 @@
         <!-- ヘッダー -->
         <header class="app-header">
             <h1 class="logo">⚡ TYPING BATTLE <span class="badge">ONLINE</span></h1>
-            <div id="room-badge" class="room-badge hidden">ROOM: <span id="header-room-id">----</span></div>
+            <div class="header-right">
+                <div id="room-badge" class="room-badge hidden">ROOM: <span id="header-room-id">----</span></div>
+                <button id="btn-header-leave" class="btn-leave hidden">🚪 部屋を出る</button>
+            </div>
         </header>
 
         <!-- 1. トップ画面（部屋作成・参加） -->
@@ -45,7 +48,7 @@
             </div>
         </section>
 
-        <!-- 2. ロビー画面（待機・ホスト設定） -->
+        <!-- 2. 待機部屋画面（ホスト設定） -->
         <section id="screen-lobby" class="screen">
             <div class="card lobby-card">
                 <div class="lobby-header">
@@ -75,7 +78,7 @@
 
                     <div class="setting-item">
                         <div class="setting-label">
-                            <span>初期HP（ミス1回で -1 / 単語クリアで相手 -1）</span>
+                            <span>初期HP（ミス1回で -1 は常時発動）</span>
                             <strong class="setting-val"><span id="val-hp">30</span> HP</strong>
                         </div>
                         <input type="range" id="slider-hp" class="ui-slider" min="5" max="100" step="5" value="30">
@@ -91,6 +94,18 @@
                         <div class="slider-ticks"><span>30秒</span><span>1分30秒</span><span>3分</span><span>4分</span><span>5分</span></div>
                     </div>
 
+                    <!-- 単語クリアで相手-1のON/OFFスイッチ -->
+                    <div class="setting-item toggle-row">
+                        <div>
+                            <div class="toggle-title">⚔️ 単語クリア攻撃（相手HP -1）</div>
+                            <div class="toggle-desc">ONにすると単語を1つ打ち切るたびに相手のHPを1削ります</div>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="toggle-attack" checked>
+                            <span class="switch-slider"></span>
+                        </label>
+                    </div>
+
                     <div class="setting-item">
                         <div class="setting-label">
                             <span>出題難易度</span>
@@ -100,11 +115,13 @@
                             <button type="button" class="diff-btn active" data-diff="medium">中級 (MEDIUM)</button>
                             <button type="button" class="diff-btn" data-diff="hard">上級 (HARD)</button>
                             <button type="button" class="diff-btn" data-diff="goat">伝説 (GOAT)</button>
+                            <button type="button" class="diff-btn diff-mix" data-diff="mix">全混ぜ (MIX)</button>
                         </div>
                     </div>
                 </div>
 
-                <div class="lobby-footer">
+                <div class="lobby-footer-buttons">
+                    <button id="btn-lobby-leave" class="btn btn-outline">← トップ画面に戻る</button>
                     <button id="btn-start-game" class="btn btn-primary btn-large" disabled>対戦相手を待っています</button>
                 </div>
             </div>
@@ -112,9 +129,7 @@
 
         <!-- 3. バトル画面（ダイレクトタイピング） -->
         <section id="screen-battle" class="screen">
-            <!-- 上部：お互いのHPゲージ＆タイマー -->
             <div class="battle-hud">
-                <!-- 自分 -->
                 <div class="fighter-box self-box" id="hud-self">
                     <div class="fighter-info">
                         <span class="fighter-name" id="battle-self-name">自分</span>
@@ -126,13 +141,11 @@
                     <div class="hp-text">HP: <span id="battle-self-hp">30</span> / <span id="battle-self-maxhp">30</span></div>
                 </div>
 
-                <!-- 中央タイマー -->
                 <div class="timer-box">
                     <div class="timer-label">TIME</div>
                     <div class="timer-value" id="battle-timer">01:00</div>
                 </div>
 
-                <!-- 相手 -->
                 <div class="fighter-box enemy-box" id="hud-enemy">
                     <div class="fighter-info">
                         <span class="fighter-name" id="battle-enemy-name">相手</span>
@@ -145,9 +158,8 @@
                 </div>
             </div>
 
-            <!-- 中央：タイピング表示エリア（テキストボックスなし・直接入力） -->
             <div class="typing-stage" id="typing-stage">
-                <div class="stage-hint">キーボードで直接タイピングしてください（全通りのローマ字に対応）</div>
+                <div class="stage-hint" id="battle-rule-hint">キーボードで直接タイピングしてください（ミスでHP -1）</div>
                 <div class="word-kana" id="word-kana">じゅんびちゅう</div>
                 <div class="word-ja" id="word-ja">準備中...</div>
                 <div class="word-romaji">
@@ -189,7 +201,10 @@
                         <p>ミス回数: <strong id="res-enemy-miss">0</strong></p>
                     </div>
                 </div>
-                <button id="btn-back-lobby" class="btn btn-primary btn-large">ロビーに戻る</button>
+                <div class="result-footer-buttons">
+                    <button id="btn-result-leave" class="btn btn-outline">トップ画面に戻る</button>
+                    <button id="btn-back-lobby" class="btn btn-primary btn-large">同じ部屋で再戦待機</button>
+                </div>
             </div>
         </section>
     </div>

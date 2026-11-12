@@ -28,8 +28,21 @@ function formatTime(sec) {
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+// 難易度に応じた問題リスト取得（MIXは全難易度を結合）
+function getWordListByDifficulty(diff) {
+    if (diff === 'mix') {
+        return [
+            ...wordLists.easy,
+            ...wordLists.medium,
+            ...wordLists.hard,
+            ...wordLists.goat
+        ];
+    }
+    return wordLists[diff] || wordLists.medium;
+}
+
 // ==========================================
-// 1. ホーム画面のイベント
+// 1. ホーム画面＆部屋退出イベント
 // ==========================================
 document.getElementById('btn-create-room').addEventListener('click', () => {
     const playerName = document.getElementById('player-name-input').value.trim() || 'プレイヤー1';
@@ -50,6 +63,28 @@ socket.on('errorMsg', (msg) => {
     document.getElementById('home-error').textContent = msg;
 });
 
+// 部屋から退出してトップ画面に戻る処理
+function leaveCurrentRoom() {
+    if (currentRoom && currentRoom.status === 'playing') {
+        if (!confirm('試合中です。本当に部屋から退出しますか？')) return;
+    }
+    socket.emit('leaveRoom');
+}
+
+document.getElementById('btn-header-leave').addEventListener('click', leaveCurrentRoom);
+document.getElementById('btn-lobby-leave').addEventListener('click', leaveCurrentRoom);
+document.getElementById('btn-result-leave').addEventListener('click', leaveCurrentRoom);
+
+socket.on('leftRoom', () => {
+    currentRoom = null;
+    isHost = false;
+    document.getElementById('room-badge').classList.add('hidden');
+    document.getElementById('btn-header-leave').classList.add('hidden');
+    document.getElementById('revive-overlay').classList.add('hidden');
+    document.getElementById('home-error').textContent = '';
+    showScreen('home');
+});
+
 // ==========================================
 // 2. ロビー画面＆ホスト設定の同期
 // ==========================================
@@ -60,6 +95,7 @@ socket.on('roomJoined', ({ roomId, isHost: hostFlag, room }) => {
 
     document.getElementById('home-error').textContent = '';
     document.getElementById('room-badge').classList.remove('hidden');
+    document.getElementById('btn-header-leave').classList.remove('hidden');
     document.getElementById('header-room-id').textContent = roomId;
     document.getElementById('lobby-room-id').textContent = roomId;
 
@@ -78,7 +114,8 @@ socket.on('updateRoom', (room) => {
 socket.on('opponentLeft', (room) => {
     currentRoom = room;
     isHost = (room.hostId === myId);
-    alert('対戦相手が切断しました。ロビーに戻ります。');
+    document.getElementById('revive-overlay').classList.add('hidden');
+    alert('対戦相手が退出しました。ロビーに戻ります。');
     updateLobbyUI(room);
     showScreen('lobby');
 });
@@ -92,9 +129,10 @@ function updateLobbyUI(room) {
     document.getElementById('lobby-p1-name').textContent = hostPlayer ? hostPlayer.name : '待機中...';
     document.getElementById('lobby-p2-name').textContent = guestPlayer ? guestPlayer.name : '待機中...';
 
-    // スライダーと難易度ボタンの値反映
+    // スライダー・攻撃トグル・難易度ボタンの値反映
     const sliderHp = document.getElementById('slider-hp');
     const sliderTime = document.getElementById('slider-time');
+    const toggleAttack = document.getElementById('toggle-attack');
     const diffBtns = document.querySelectorAll('.diff-btn');
 
     sliderHp.value = room.settings.maxHp;
@@ -104,6 +142,9 @@ function updateLobbyUI(room) {
     const mins = Math.floor(room.settings.timeLimit / 60);
     const secs = room.settings.timeLimit % 60;
     document.getElementById('val-time').textContent = `${mins}分${String(secs).padStart(2, '0')}秒 (${room.settings.timeLimit}秒)`;
+
+    toggleAttack.checked = Boolean(room.settings.attackEnabled);
+    toggleAttack.disabled = !isHost;
 
     diffBtns.forEach(btn => {
         btn.classList.toggle('active', btn.dataset.diff === room.settings.difficulty);
@@ -131,16 +172,17 @@ function updateLobbyUI(room) {
     }
 }
 
-// ホストのスライダー・難易度変更送信
+// ホストのルール変更送信
 function sendSettingsUpdate() {
     if (!isHost) return;
     const maxHp = Number(document.getElementById('slider-hp').value);
     const timeLimit = Number(document.getElementById('slider-time').value);
+    const attackEnabled = document.getElementById('toggle-attack').checked;
     const activeDiffBtn = document.querySelector('.diff-btn.active');
     const difficulty = activeDiffBtn ? activeDiffBtn.dataset.diff : 'medium';
 
     socket.emit('updateSettings', {
-        settings: { maxHp, timeLimit, difficulty }
+        settings: { maxHp, timeLimit, difficulty, attackEnabled }
     });
 }
 
@@ -157,6 +199,10 @@ document.getElementById('slider-time').addEventListener('input', (e) => {
     sendSettingsUpdate();
 });
 
+document.getElementById('toggle-attack').addEventListener('change', () => {
+    sendSettingsUpdate();
+});
+
 document.querySelectorAll('.diff-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         if (!isHost) return;
@@ -169,8 +215,7 @@ document.querySelectorAll('.diff-btn').forEach(btn => {
 // ゲーム開始ボタン（ホスト）
 document.getElementById('btn-start-game').addEventListener('click', () => {
     if (!isHost || !currentRoom) return;
-    const list = wordLists[currentRoom.settings.difficulty] || wordLists.medium;
-    // 出題順インデックスをシャッフルして生成
+    const list = getWordListByDifficulty(currentRoom.settings.difficulty);
     const indices = Array.from({ length: list.length }, (_, i) => i);
     for (let i = indices.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -184,12 +229,18 @@ document.getElementById('btn-start-game').addEventListener('click', () => {
 // ==========================================
 socket.on('gameStarted', (room) => {
     currentRoom = room;
-    activeWordList = wordLists[room.settings.difficulty] || wordLists.medium;
+    activeWordList = getWordListByDifficulty(room.settings.difficulty);
     wordOrder = room.wordIndices;
     currentWordPos = 0;
 
     document.getElementById('battle-timer').textContent = formatTime(room.remainingTime);
     document.getElementById('revive-overlay').classList.add('hidden');
+
+    // ルールに応じたヒント表示
+    const hintText = room.settings.attackEnabled
+        ? 'ミスで自分HP -1 ／ 単語クリアで相手HP -1！'
+        : 'ミスで自分HP -1（単語クリア攻撃OFF：ノーミス勝負！）';
+    document.getElementById('battle-rule-hint').textContent = hintText;
 
     updateBattleHUD(room.players);
     loadNextWord();
@@ -257,15 +308,14 @@ function renderRomajiGuide() {
     document.getElementById('romaji-untyped').textContent = untyped;
 }
 
-// 画面全体のキーボード直接入力イベント（テキストボックス不要）
+// 画面全体のキーボード直接入力イベント
 window.addEventListener('keydown', (e) => {
     if (!screens.battle.classList.contains('active')) return;
     if (!currentRoom || currentRoom.status !== 'playing') return;
 
     const self = currentRoom.players[myId];
-    if (!self || self.isDead) return; // HP0のときはタイピング不可
+    if (!self || self.isDead) return;
 
-    // 修飾キーや特殊キーは無視
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key.length !== 1) return;
 
@@ -282,13 +332,12 @@ window.addEventListener('keydown', (e) => {
         setTimeout(() => stageEl.classList.remove('hit-glow'), 100);
     } else if (result.status === 'word_completed') {
         renderRomajiGuide();
-        socket.emit('wordCompleted', { damage: 1 });
+        socket.emit('wordCompleted');
         loadNextWord();
     } else if (result.status === 'miss') {
-        // ミスしたらHP減少をサーバーへ通知＆画面シェイク
         socket.emit('playerMiss');
         stageEl.classList.remove('miss-flash');
-        void stageEl.offsetWidth; // リフロー強制でアニメーション再発火
+        void stageEl.offsetWidth;
         stageEl.classList.add('miss-flash');
     }
 });

@@ -31,7 +31,6 @@ body {
     overflow-x: hidden;
 }
 
-/* 背景グリッド演出 */
 .bg-grid {
     position: fixed;
     inset: 0;
@@ -76,6 +75,12 @@ body {
     vertical-align: middle;
 }
 
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
 .room-badge {
     font-family: 'JetBrains Mono', monospace;
     background: var(--bg-panel-light);
@@ -84,6 +89,22 @@ body {
     border-radius: 20px;
     font-weight: 700;
     color: var(--primary);
+}
+
+.btn-leave {
+    background: rgba(255, 42, 95, 0.15);
+    border: 1px solid var(--danger);
+    color: var(--danger);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.btn-leave:hover {
+    background: var(--danger);
+    color: #fff;
 }
 
 /* 画面切り替え */
@@ -103,7 +124,6 @@ body {
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* カード共通 */
 .card {
     background: var(--bg-panel);
     border: 1px solid var(--border);
@@ -159,6 +179,17 @@ body {
 }
 .btn-secondary:hover:not(:disabled) {
     background: #9068ff;
+}
+.btn-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+.btn-outline:hover {
+    border-color: var(--text-main);
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.05);
 }
 .btn-large {
     width: 100%;
@@ -294,7 +325,7 @@ body {
     font-weight: 500;
 }
 .setting-item {
-    margin-bottom: 20px;
+    margin-bottom: 22px;
 }
 .setting-item:last-child {
     margin-bottom: 0;
@@ -310,7 +341,71 @@ body {
     font-family: 'JetBrains Mono', monospace;
 }
 
-/* カスタムスライダー（カーソル式設定） */
+/* トグルスイッチ（単語クリア攻撃ON/OFF） */
+.toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-panel-light);
+    padding: 14px 18px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    gap: 16px;
+}
+.toggle-title {
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-bottom: 4px;
+}
+.toggle-desc {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 54px;
+    height: 30px;
+    flex-shrink: 0;
+}
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.switch-slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background-color: #334155;
+    transition: 0.2s;
+    border-radius: 30px;
+}
+.switch-slider:before {
+    position: absolute;
+    content: "";
+    height: 22px;
+    width: 22px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: 0.2s;
+    border-radius: 50%;
+}
+.switch input:checked + .switch-slider {
+    background-color: var(--primary);
+    box-shadow: 0 0 12px var(--primary-glow);
+}
+.switch input:checked + .switch-slider:before {
+    transform: translateX(24px);
+    background-color: #050a14;
+}
+.switch input:disabled + .switch-slider {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* カスタムスライダー */
 .ui-slider {
     -webkit-appearance: none;
     width: 100%;
@@ -346,17 +441,19 @@ body {
     font-family: 'JetBrains Mono', monospace;
 }
 
+/* 難易度ボタン（5列対応：初級・中級・上級・GOAT・MIX） */
 .difficulty-buttons {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
 }
 .diff-btn {
     background: var(--bg-panel-light);
     border: 1px solid var(--border);
     color: var(--text-muted);
-    padding: 10px;
+    padding: 10px 6px;
     border-radius: 8px;
+    font-size: 0.85rem;
     font-weight: 700;
     cursor: pointer;
     transition: all 0.15s;
@@ -366,8 +463,19 @@ body {
     border-color: var(--primary);
     color: var(--primary);
 }
+.diff-btn.diff-mix.active {
+    background: linear-gradient(135deg, rgba(0, 229, 255, 0.2), rgba(124, 77, 255, 0.25));
+    border-color: #c084fc;
+    color: #e9d5ff;
+}
 .diff-btn:disabled {
     cursor: not-allowed;
+}
+
+.lobby-footer-buttons, .result-footer-buttons {
+    display: flex;
+    gap: 14px;
+    align-items: center;
 }
 
 /* バトルHUD */
@@ -444,7 +552,7 @@ body {
     font-weight: 800;
 }
 
-/* タイピングステージ（直接入力エリア） */
+/* タイピングステージ */
 .typing-stage {
     background: var(--bg-panel);
     border: 2px solid var(--border);
@@ -634,5 +742,8 @@ body {
     }
     .difficulty-buttons {
         grid-template-columns: repeat(2, 1fr);
+    }
+    .lobby-footer-buttons, .result-footer-buttons {
+        flex-direction: column;
     }
 }
