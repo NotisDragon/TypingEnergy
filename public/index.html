@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TYPING BATTLE ONLINE</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Noto+Sans+JP:wght@500;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="bg-grid"></div>
+
+    <div class="app-container">
+        <!-- ヘッダー -->
+        <header class="app-header">
+            <h1 class="logo">⚡ TYPING BATTLE <span class="badge">ONLINE</span></h1>
+            <div id="room-badge" class="room-badge hidden">ROOM: <span id="header-room-id">----</span></div>
+        </header>
+
+        <!-- 1. トップ画面（部屋作成・参加） -->
+        <section id="screen-home" class="screen active">
+            <div class="card home-card">
+                <h2>プレイヤー名を入力</h2>
+                <input type="text" id="player-name-input" class="ui-input" placeholder="例: タイピング王" maxlength="12">
+
+                <div class="home-actions">
+                    <div class="action-box">
+                        <h3>新しく部屋を作る</h3>
+                        <p>あなたがホストになり、HPや試合時間を設定できます。</p>
+                        <button id="btn-create-room" class="btn btn-primary">部屋を作成する</button>
+                    </div>
+
+                    <div class="divider">OR</div>
+
+                    <div class="action-box">
+                        <h3>友達の部屋に入る</h3>
+                        <p>4桁のルームIDを入力して参加します。</p>
+                        <div class="join-row">
+                            <input type="text" id="room-id-input" class="ui-input room-code-input" placeholder="1234" maxlength="4">
+                            <button id="btn-join-room" class="btn btn-secondary">参加する</button>
+                        </div>
+                    </div>
+                </div>
+                <p id="home-error" class="error-text"></p>
+            </div>
+        </section>
+
+        <!-- 2. ロビー画面（待機・ホスト設定） -->
+        <section id="screen-lobby" class="screen">
+            <div class="card lobby-card">
+                <div class="lobby-header">
+                    <div>
+                        <span class="label">ルームID（相手に教えてください）</span>
+                        <div class="big-room-id" id="lobby-room-id">----</div>
+                    </div>
+                    <div class="status-pill" id="lobby-status-text">対戦相手を待っています...</div>
+                </div>
+
+                <!-- プレイヤー一覧 -->
+                <div class="players-grid">
+                    <div class="player-slot" id="slot-1">
+                        <span class="role-tag host">HOST</span>
+                        <div class="p-name" id="lobby-p1-name">待機中...</div>
+                    </div>
+                    <div class="vs-text">VS</div>
+                    <div class="player-slot" id="slot-2">
+                        <span class="role-tag guest">GUEST</span>
+                        <div class="p-name" id="lobby-p2-name">待機中...</div>
+                    </div>
+                </div>
+
+                <!-- ルール設定パネル（ホストは操作可能、ゲストは閲覧のみ） -->
+                <div class="settings-panel">
+                    <h3>⚙️ 試合ルール設定 <span id="settings-lock-note" class="lock-note">(ホストのみ変更可能)</span></h3>
+
+                    <div class="setting-item">
+                        <div class="setting-label">
+                            <span>初期HP（ミス1回で -1 / 単語クリアで相手 -1）</span>
+                            <strong class="setting-val"><span id="val-hp">30</span> HP</strong>
+                        </div>
+                        <input type="range" id="slider-hp" class="ui-slider" min="5" max="100" step="5" value="30">
+                        <div class="slider-ticks"><span>5</span><span>25</span><span>50</span><span>75</span><span>100</span></div>
+                    </div>
+
+                    <div class="setting-item">
+                        <div class="setting-label">
+                            <span>試合時間（最大5分）</span>
+                            <strong class="setting-val" id="val-time">1分00秒 (60秒)</strong>
+                        </div>
+                        <input type="range" id="slider-time" class="ui-slider" min="30" max="300" step="15" value="60">
+                        <div class="slider-ticks"><span>30秒</span><span>1分30秒</span><span>3分</span><span>4分</span><span>5分</span></div>
+                    </div>
+
+                    <div class="setting-item">
+                        <div class="setting-label">
+                            <span>出題難易度</span>
+                        </div>
+                        <div class="difficulty-buttons" id="difficulty-group">
+                            <button type="button" class="diff-btn" data-diff="easy">初級 (EASY)</button>
+                            <button type="button" class="diff-btn active" data-diff="medium">中級 (MEDIUM)</button>
+                            <button type="button" class="diff-btn" data-diff="hard">上級 (HARD)</button>
+                            <button type="button" class="diff-btn" data-diff="goat">伝説 (GOAT)</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="lobby-footer">
+                    <button id="btn-start-game" class="btn btn-primary btn-large" disabled>対戦相手を待っています</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. バトル画面（ダイレクトタイピング） -->
+        <section id="screen-battle" class="screen">
+            <!-- 上部：お互いのHPゲージ＆タイマー -->
+            <div class="battle-hud">
+                <!-- 自分 -->
+                <div class="fighter-box self-box" id="hud-self">
+                    <div class="fighter-info">
+                        <span class="fighter-name" id="battle-self-name">自分</span>
+                        <span class="fighter-score">SCORE: <strong id="battle-self-score">0</strong></span>
+                    </div>
+                    <div class="hp-bar-bg">
+                        <div class="hp-bar-fill self-hp" id="battle-self-hp-bar" style="width: 100%;"></div>
+                    </div>
+                    <div class="hp-text">HP: <span id="battle-self-hp">30</span> / <span id="battle-self-maxhp">30</span></div>
+                </div>
+
+                <!-- 中央タイマー -->
+                <div class="timer-box">
+                    <div class="timer-label">TIME</div>
+                    <div class="timer-value" id="battle-timer">01:00</div>
+                </div>
+
+                <!-- 相手 -->
+                <div class="fighter-box enemy-box" id="hud-enemy">
+                    <div class="fighter-info">
+                        <span class="fighter-name" id="battle-enemy-name">相手</span>
+                        <span class="fighter-score">SCORE: <strong id="battle-enemy-score">0</strong></span>
+                    </div>
+                    <div class="hp-bar-bg">
+                        <div class="hp-bar-fill enemy-hp" id="battle-enemy-hp-bar" style="width: 100%;"></div>
+                    </div>
+                    <div class="hp-text">HP: <span id="battle-enemy-hp">30</span> / <span id="battle-enemy-maxhp">30</span></div>
+                </div>
+            </div>
+
+            <!-- 中央：タイピング表示エリア（テキストボックスなし・直接入力） -->
+            <div class="typing-stage" id="typing-stage">
+                <div class="stage-hint">キーボードで直接タイピングしてください（全通りのローマ字に対応）</div>
+                <div class="word-kana" id="word-kana">じゅんびちゅう</div>
+                <div class="word-ja" id="word-ja">準備中...</div>
+                <div class="word-romaji">
+                    <span id="romaji-typed" class="romaji-typed"></span><span id="romaji-untyped" class="romaji-untyped">ready</span>
+                </div>
+                <div class="last-key-indicator">最終入力キー: <span id="last-key">-</span></div>
+            </div>
+
+            <!-- HPゼロ時の復活オーバーレイ（30回連打でHP5回復） -->
+            <div id="revive-overlay" class="revive-overlay hidden">
+                <div class="revive-modal">
+                    <div class="skull-icon">💀</div>
+                    <h2>HPが 0 になりました！</h2>
+                    <p>復活ボタンを <strong>30回連打</strong> すると <strong>HP 5</strong> で戦線復帰します！</p>
+                    <div class="revive-progress-bg">
+                        <div class="revive-progress-fill" id="revive-bar" style="width: 0%;"></div>
+                    </div>
+                    <div class="revive-counter"><span id="revive-count">0</span> / 30 回</div>
+                    <button id="btn-revive-mash" class="btn-revive">🔥 連打して復活！ 🔥</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. リザルト画面 -->
+        <section id="screen-result" class="screen">
+            <div class="card result-card">
+                <div id="result-banner" class="result-banner">VICTORY!</div>
+                <div class="result-grid">
+                    <div class="result-player">
+                        <h3 id="res-self-name">自分</h3>
+                        <p>残りHP: <strong id="res-self-hp">0</strong></p>
+                        <p>スコア: <strong id="res-self-score">0</strong></p>
+                        <p>ミス回数: <strong id="res-self-miss">0</strong></p>
+                    </div>
+                    <div class="result-player">
+                        <h3 id="res-enemy-name">相手</h3>
+                        <p>残りHP: <strong id="res-enemy-hp">0</strong></p>
+                        <p>スコア: <strong id="res-enemy-score">0</strong></p>
+                        <p>ミス回数: <strong id="res-enemy-miss">0</strong></p>
+                    </div>
+                </div>
+                <button id="btn-back-lobby" class="btn btn-primary btn-large">ロビーに戻る</button>
+            </div>
+        </section>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="wordLists.js"></script>
+    <script src="client.js"></script>
+</body>
+</html>
